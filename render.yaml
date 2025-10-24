@@ -1,0 +1,58 @@
+# render.yaml - Configuration pour déployer sur Render
+services:
+  # Service Web Principal
+  - type: web
+    name: futsal-gps-tracker
+    runtime: python
+    plan: free  # Utilisez 'starter' ou 'standard' pour plus de ressources
+    
+    # Configuration de build
+    buildCommand: |
+      pip install --upgrade pip
+      pip install -r requirements.txt
+      python -c "from ultralytics import YOLO; YOLO('yolov8n.pt')"
+      mkdir -p uploads results models static/css static/js templates
+    
+    # Commande de démarrage
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --timeout 120 --workers 1
+    
+    # Variables d'environnement
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.10.0
+      - key: FLASK_ENV
+        value: production
+      - key: DEBUG
+        value: false
+      - key: MAX_UPLOAD_SIZE
+        value: 100  # MB - Limité sur le plan gratuit
+      - key: YOLO_MODEL
+        value: yolov8n.pt
+      
+    # Health check
+    healthCheckPath: /health
+    
+    # Disk (pour stocker les uploads temporairement)
+    disk:
+      name: futsal-uploads
+      mountPath: /app/uploads
+      sizeGB: 1  # 1GB sur le plan gratuit
+
+  # Base de données PostgreSQL (optionnel)
+  - type: pserv
+    name: futsal-db
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile.postgres
+    disk:
+      name: postgres-data
+      mountPath: /var/lib/postgresql/data
+      sizeGB: 1
+
+# Jobs (pour les tâches planifiées)
+# - type: cron
+#   name: cleanup-old-files
+#   runtime: python
+#   schedule: "0 2 * * *"  # Tous les jours à 2h du matin
+#   buildCommand: pip install -r requirements.txt
+#   startCommand: python cleanup.py
